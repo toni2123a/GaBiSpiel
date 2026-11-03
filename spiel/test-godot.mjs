@@ -15,7 +15,7 @@ const point=async(x,z)=>worldClick(170+x*135+z*24,245+z*48);
 const advance=async(ms)=>{await page.evaluate(ms=>advanceTime(ms),ms);await wait();};
 fs.mkdirSync('output/godot-qa',{recursive:true});await page.screenshot({path:'output/godot-qa/choice.png'});
 assert.equal((await state()).engine,'Godot 2D');assert.equal((await state()).choosingCharacter,true);assert.equal((await state()).room,'outside');
-await click(805,612);await page.waitForFunction(()=>window.gabiState.person==='Ela');assert.equal((await state()).person,'Ela');assert.equal((await state()).choosingCharacter,false);
+await click(680,612);await page.waitForFunction(()=>window.gabiState.person==='Ela');assert.equal((await state()).person,'Ela');assert.equal((await state()).choosingCharacter,false);
 const initial=(await state()).position.x;await point(3.3,6.2);assert((await state()).position.x>initial);assert((await state()).position.x<3.3,'no teleport');await advance(2000);assert(Math.abs((await state()).position.x-3.3)<.02);
 await worldClick(330,410);assert((await state()).gateOpen);await page.screenshot({path:'output/godot-qa/outside.png'});await worldClick(330,410);await advance(5000);assert.equal((await state()).room,'garage');
 await worldClick(310,175);await advance(5000);assert.equal((await state()).room,'workshop');await worldClick(302,182);assert((await state()).hatchOpen);assert.equal((await state()).room,'workshop');await page.screenshot({path:'output/godot-qa/oil.png'});await click(870,655);assert.equal((await state()).hatchOpen,false);
@@ -24,7 +24,7 @@ await point(.5,2.6);await advance(5000);assert(Math.abs((await state()).position
 await click(1280,317);await page.keyboard.press('r');await wait();assert.equal((await state()).rotation,1);await point(.3,3.3);assert.equal((await state()).items.length,2);
 await page.screenshot({path:'output/godot-qa/workshop.png'});
 await point(.4,3.5);assert((await state()).selected);await page.keyboard.press('Delete');await wait();assert.equal((await state()).items.length,1);
-await page.reload();await page.waitForFunction(()=>window.gabiState?.ready);assert.equal((await state()).items.length,1,'saved item loaded again');await click(555,612);await page.waitForFunction(()=>window.gabiState.person==='Dirk');assert.equal((await state()).person,'Dirk');
+await page.reload();await page.waitForFunction(()=>window.gabiState?.ready);assert.equal((await state()).items.length,1,'saved item loaded again');await click(430,612);await page.waitForFunction(()=>window.gabiState.person==='Dirk');assert.equal((await state()).person,'Dirk');
 await page.setViewportSize({width:390,height:844});await page.screenshot({path:'output/godot-qa/mobile.png'});
 assert.deepEqual(errors,[]);console.log('PASS: Godot web startup, choice Dirk/Ela, outside, smooth click walking, AStar navigation, sectional gate, garage, step into workshop, view-only oil hatch, placement, rotation, deletion, API save/load, no engine/browser errors');await browser.close();
 

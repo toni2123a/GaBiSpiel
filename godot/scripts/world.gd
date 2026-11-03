@@ -1,6 +1,8 @@
 extends Node2D
 
 var game: Node
+var furniture_nodes: Dictionary = {}
+var last_selected: int = 0
 var font: Font = ThemeDB.fallback_font
 const INK = Color("30352d")
 
@@ -51,9 +53,10 @@ func _draw() -> void:
 	if not game.path.is_empty():
 		var marker: Vector2 = p(game.path[-1].x, game.path[-1].y)
 		draw_arc(marker, 11, 0, TAU, 24, Color("f4d34a"), 3)
-	draw_rect(Rect2(0,645,1000,45), Color("787e76"))
-	for x in range(0,1000,55):
-		draw_line(Vector2(x,672), Vector2(x+30,672), Color("ddd6b8"), 4)
+	if game.room == "outside":
+		draw_rect(Rect2(0,645,1000,45), Color("787e76"))
+		for x in range(0,1000,55):
+			draw_line(Vector2(x,672), Vector2(x+30,672), Color("ddd6b8"), 4)
 	draw_rect(Rect2(0,0,1000,690), INK, false, 3)
 
 func tree(x: float, y: float) -> void:
@@ -122,48 +125,37 @@ func inside() -> void:
 		label("WANDLUKE",Vector2(254,138),16)
 		label("Zum Öffnen anklicken",Vector2(245,235),13)
 	label("Zur Garage" if game.room == "workshop" else "Zum Vorplatz",p(0,depth)+Vector2(0,42),16)
-	var visible_items: Array = game.items.filter(func(i): return i.room == game.room)
-	visible_items.sort_custom(func(a,b): return a.z < b.z)
-	for item in visible_items:
-		furniture(item)
-	if game.tool != "" and game.hover_valid:
-		furniture({"type":game.tool,"x":game.hover.x,"z":game.hover.y,"rot":game.rotation_index,"id":-1})
+	# Furniture has its own CanvasItems so feet and furniture sort together.
+	if game.tool != "":
+		var size: Vector2=game.item_size({"type":game.tool,"rot":game.rotation_index})
+		var x: float=game.hover.x
+		var z: float=game.hover.y
+		var color := Color("497742") if game.hover_valid else Color("ba493b")
+		draw_colored_polygon(PackedVector2Array([p(x,z),p(x+size.x,z),p(x+size.x,z+size.y),p(x,z+size.y)]),Color(color,.3))
+		draw_polyline(PackedVector2Array([p(x,z),p(x+size.x,z),p(x+size.x,z+size.y),p(x,z+size.y),p(x,z)]),color,3,true)
 
-func furniture(item: Dictionary) -> void:
-	var size: Vector2 = game.item_size(item)
-	var x: float = float(item.x)
-	var z: float = float(item.z)
-	var color := Color("91704d")
-	var height := 65.0
-	match item.type:
-		"fridge": color=Color("dbe3d3"); height=108
-		"beer": color=Color("497742"); height=27
-		"tools": color=Color("b9533e"); height=55
-		"sofa": color=Color("b77c48"); height=30
-		"radio": color=Color("535f58"); height=30
-	box(x,z,size.x,size.y,height,color)
-	match item.type:
-		"bench":
-			label("WERKBANK",p(x+.1,z+size.y,35),13)
-			draw_line(p(x+.2,z+.25,70),p(x+.5,z+.4,70),INK,4)
-		"fridge":
-			draw_line(p(x+.05,z+size.y,72),p(x+size.x-.05,z+size.y,72),INK,2)
-			draw_line(p(x+.12,z+size.y,52),p(x+.12,z+size.y,30),INK,3)
-		"beer":
-			for n in range(6):
-				var pos := p(x+.1+(n%3)*.17,z+.1+floor(n/3.0)*.18,43)
-				draw_rect(Rect2(pos,Vector2(6,18)),Color("765024"))
-				draw_rect(Rect2(pos+Vector2(0,8),Vector2(6,5)),Color("e7c752"))
-			label("BIER",p(x+.08,z+size.y,8),12,Color("f7dc73"))
-		"tools":
-			for h in [15,28,41]:
-				draw_line(p(x+.07,z+size.y,h),p(x+size.x-.07,z+size.y,h),INK,2)
-		"sofa":
-			box(x,z,size.x,.15,67,color.darkened(.1))
-			box(x,z,.15,size.y,45,color.darkened(.1))
-			box(x+size.x-.15,z,.15,size.y,45,color.darkened(.1))
-		"radio":
-			label("◉ ▤",p(x+.03,z+size.y,10),16,Color("e6d398"))
-			draw_line(p(x+.1,z,30),p(x+.1,z,60)+Vector2(-8,0),INK,2)
-	if int(item.id) == game.selected_id or int(item.id) == -1:
-		draw_polyline(PackedVector2Array([p(x,z),p(x+size.x,z),p(x+size.x,z+size.y),p(x,z+size.y),p(x,z)]),Color("f4d34a"),3)
+func sync_furniture() -> void:
+	var visible_items: Array = game.items.filter(func(i): return i.room == game.room)
+	if game.tool != "" and game.hover_valid:
+		visible_items.append({"type":game.tool,"x":game.hover.x,"z":game.hover.y,"rot":game.rotation_index,"id":-1})
+	var active: Array = []
+	for item in visible_items:
+		var id: int=int(item.id)
+		active.append(id)
+		if not furniture_nodes.has(id):
+			var piece := Node2D.new()
+			piece.set_script(preload("res://scripts/furniture.gd"))
+			piece.game=game
+			add_child(piece)
+			furniture_nodes[id]=piece
+		var piece: Node2D=furniture_nodes[id]
+		if piece.item != item or last_selected != game.selected_id:
+			piece.item=item.duplicate()
+			piece.queue_redraw()
+		piece.z_index=roundi((float(item.z)+game.item_size(item).y)*100)
+		piece.modulate.a=.5 if id == -1 else 1.0
+	for id in furniture_nodes.keys():
+		if not id in active:
+			furniture_nodes[id].queue_free()
+			furniture_nodes.erase(id)
+	last_selected=game.selected_id

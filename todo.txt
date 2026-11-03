@@ -1,3 +1,6 @@
+Bearbeitungsstand 03.11.2026: Audit, Roadmap, priorisierte Umsetzung und QA abgeschlossen.
+Details und offene Ausbaupunkte: docs/QUALITY_REPORT.md
+
 # MASTER-PROMPT: Godot 2D – Professional Game Transformation
 
 ## DEINE ROLLE

@@ -9,6 +9,7 @@ const TYPES = {
 	"radio":{"name":"Radio","size":Vector2(.5,.35)}
 }
 const PLAYER_SCENE = preload("res://scenes/player.tscn")
+const FURNITURE_HEIGHTS = {"bench":65.0,"fridge":108.0,"beer":27.0,"tools":55.0,"sofa":67.0,"radio":30.0}
 var room: String = "outside"
 var character_name: String = ""
 var player_pos := Vector2(2.3,6.2)
@@ -25,6 +26,9 @@ var hover_valid: bool = false
 var ready_to_edit: bool = false
 var save_pending: bool = false
 var save_active: bool = false
+var load_active: bool = false
+var transition: ColorRect
+var transition_tween: Tween
 var api_url: String = "http://127.0.0.1:8085/api/state"
 var bridge_callback: JavaScriptObject
 var bridge_clock: float = 0
@@ -94,12 +98,19 @@ func button(parent: Node, text: String, rect: Rect2, action: Callable) -> Button
 	b.add_theme_color_override("font_color",Color("30352d"))
 	b.add_theme_color_override("font_hover_color",Color("30352d"))
 	b.add_theme_color_override("font_pressed_color",Color("30352d"))
+	b.add_theme_color_override("font_focus_color",Color("30352d"))
 	b.add_theme_font_size_override("font_size",17)
 	b.pressed.connect(action)
 	parent.add_child(b)
 	return b
 
 func setup_ui() -> void:
+	var theme := Theme.new()
+	var focus := panel_style(Color.TRANSPARENT)
+	focus.border_color=Color("497742")
+	focus.set_border_width_all(4)
+	theme.set_stylebox("focus","Button",focus)
+	get_tree().root.theme=theme
 	make_label(hud,"DIE GEBURTSTAGSEDITION · GODOT 2D",Rect2(26,10,850,25),13)
 	make_label(hud,"GaBi bei Dirk",Rect2(24,34,850,60),43)
 	for data in [["outside","Vor der Garage",24],["garage","Garage",215],["workshop","Werkstatt",365]]:
@@ -128,42 +139,50 @@ func setup_ui() -> void:
 	status_label=make_label(side,"Spielstand wird geladen …",Rect2(18,720,294,45),14)
 	status_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	room_label=make_label(hud,"Vorplatz · Haus am Hang · Sektionaltor",Rect2(24,842,1000,27),16)
-	speech=make_label(hud,"Dirk oder Ela auswählen und zur GaBi vorbeikommen.",Rect2(24,876,1345,40),18)
+	speech=make_label(hud,"Dirk, Ela oder Silas auswählen und zur GaBi vorbeikommen.",Rect2(24,876,1345,40),18)
 	button(hud,"Spielstand erneut laden",Rect2(1070,42,300,42),load_state)
+	button(side,"Speichern wiederholen",Rect2(18,675,294,38),flush_save)
 	setup_picker()
 	setup_oil_view()
 	update_goals()
+	transition=ColorRect.new()
+	transition.color=Color(0.96,0.93,0.83,0)
+	transition.position=Vector2(24,145)
+	transition.size=Vector2(1000,690)
+	transition.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	hud.add_child(transition)
 
 func setup_picker() -> void:
 	picker=Window.new()
 	picker.visible=false
 	picker.title="Willkommen zur GaBi"
-	picker.size=Vector2i(580,420)
+	picker.size=Vector2i(830,420)
 	picker.unresizable=true
 	picker.exclusive=true
 	picker.transient=true
 	add_child(picker)
 	var background:=ColorRect.new()
 	background.color=Color("f5ecd4")
-	background.size=Vector2(580,420)
+	background.size=Vector2(830,420)
 	background.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	picker.add_child(background)
 	picker.close_requested.connect(func():
 		if character_name != "": picker.hide())
 	make_label(picker,"Als wer kommst du vorbei?",Rect2(26,20,530,50),30)
 	make_label(picker,"Wähle deine Figur für die heutige Runde.",Rect2(26,75,530,30),18)
-	for entry in [["Dirk",77,70],["Ela",742,320]]:
+	for entry in [["Dirk",70],["Ela",320],["Silas",570]]:
 		var name_value: String = entry[0]
 		var portrait := TextureRect.new()
-		var atlas := AtlasTexture.new()
-		atlas.atlas=preload("res://assets/charactersheet.png")
-		atlas.region=Rect2(406,entry[1],108,190 if name_value=="Dirk" else 180)
-		portrait.texture=atlas
-		portrait.position=Vector2(entry[2]+20,123)
-		portrait.size=Vector2(108,190)
 		portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+		portrait.texture=player.sprite_texture(name_value)
+		portrait.position=Vector2(entry[1]+20,123)
+		portrait.size=Vector2(108,190)
+		portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		picker.add_child(portrait)
-		button(picker,name_value,Rect2(entry[2],332,150,50),func(): select_character(name_value))
+		var choice := button(picker,name_value,Rect2(entry[1],332,150,50),func(): select_character(name_value))
+		if name_value == "Dirk":
+			picker.visibility_changed.connect(func():
+				if picker.visible: choice.grab_focus())
 
 func setup_oil_view() -> void:
 	oil_window=Window.new()
@@ -188,7 +207,9 @@ func setup_oil_view() -> void:
 	picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
 	oil_window.add_child(picture)
 	make_label(oil_window,"Nur Ölcontainer. Der Raum ist nicht begehbar.",Rect2(25,342,560,30),18)
-	button(oil_window,"Luke schließen",Rect2(365,378,220,40),close_hatch)
+	var close_button := button(oil_window,"Luke schließen",Rect2(365,378,220,40),close_hatch)
+	oil_window.visibility_changed.connect(func():
+		if oil_window.visible: close_button.grab_focus())
 
 func select_character(value: String) -> void:
 	character_name=value
@@ -207,6 +228,10 @@ func change_room(value: String) -> void:
 	if not value in ["outside","garage","workshop"]:
 		return
 	room=value
+	if transition_tween: transition_tween.kill()
+	transition.color.a=.85
+	transition_tween=create_tween()
+	transition_tween.tween_property(transition,"color:a",0.0,.24).set_trans(Tween.TRANS_SINE)
 	player_pos=Vector2(2.3,6.2 if room=="outside" else depth()-.9)
 	path.clear()
 	arrival=""
@@ -290,6 +315,7 @@ func smooth_route(route: PackedVector2Array) -> PackedVector2Array:
 
 func _physics_process(delta: float) -> void:
 	if character_name=="" or picker.visible or oil_window.visible:
+		player.walking=false
 		return
 	var budget:=2.2*delta
 	while not path.is_empty() and budget>0:
@@ -325,6 +351,8 @@ func advance_from_js(arguments: Array) -> void:
 
 func refresh() -> void:
 	player.position=world.p(player_pos.x,player_pos.y)
+	player.z_index=roundi(player_pos.y*100)
+	world.sync_furniture()
 	# Face the current path segment, skipping the waypoint at the starting position.
 	var direction := Vector2.ZERO
 	for waypoint in path:
@@ -340,7 +368,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_ESCAPE: cancel_tool()
-			KEY_R: rotation_index=1-rotation_index
+			KEY_R:
+				rotation_index=1-rotation_index
+				update_preview()
 			KEY_DELETE:
 				if selected_id!=0:
 					items=items.filter(func(i): return int(i.id)!=selected_id)
@@ -349,7 +379,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_F: DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
 	if event is InputEventMouseMotion:
 		hover=world.unproject(world.get_local_mouse_position()).snapped(Vector2(.1,.1))
-		hover_valid=tool!="" and placement_valid({"type":tool,"x":hover.x,"z":hover.y,"rot":rotation_index})
+		update_preview()
 		world.queue_redraw()
 	if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:
 		click_world(world.get_local_mouse_position())
@@ -362,6 +392,7 @@ func click_world(pixel: Vector2) -> void:
 		if Rect2(245,348,200,117).has_point(pixel):
 			if not gate_open:
 				gate_open=true
+				player.react()
 				speech.text="Sektionaltor offen. Nochmal klicken zum Reingehen."
 			else:
 				walk_to(Vector2(1,4.6),"garage")
@@ -381,6 +412,7 @@ func click_world(pixel: Vector2) -> void:
 			return
 		items=items.filter(func(i): return int(i.id)!=selected_id)
 		items.append(item)
+		player.react()
 		cancel_tool()
 		speech.text="Steht! So langsam wird es eine gemütliche GaBi."
 		save_state()
@@ -389,13 +421,17 @@ func click_world(pixel: Vector2) -> void:
 		var item: Dictionary=items[index]
 		if item.room!=room: continue
 		var size:=item_size(item)
-		var origin: Vector2=world.p(item.x,item.z)
-		if Rect2(origin-Vector2(0,100),Vector2(size.x*135+size.y*24,size.y*48+100)).has_point(pixel):
+		var corners := PackedVector2Array()
+		for offset in [Vector2.ZERO,Vector2(size.x,0),size,Vector2(0,size.y)]:
+			corners.append(world.p(item.x+offset.x,item.z+offset.y))
+			corners.append(world.p(item.x+offset.x,item.z+offset.y,FURNITURE_HEIGHTS[item.type]))
+		if Geometry2D.is_point_in_polygon(pixel,Geometry2D.convex_hull(corners)):
 			selected_id=int(item.id)
 			tool=item.type
 			rotation_index=int(item.rot)
 			path.clear()
 			tool_label.text=TYPES[tool].name+" verschieben"
+			update_preview()
 			return
 	if room=="garage" and pixel.y<245 and pixel.x>245 and pixel.x<385:
 		walk_to(Vector2(1.1,.5),"workshop")
@@ -414,6 +450,11 @@ func choose_tool(type: String) -> void:
 	selected_id=0
 	rotation_index=0
 	tool_label.text=TYPES[type].name+" platzieren"
+	update_preview()
+
+func update_preview() -> void:
+	hover_valid=tool!="" and placement_valid({"type":tool,"x":hover.x,"z":hover.y,"rot":rotation_index})
+	world.queue_redraw()
 
 func cancel_tool() -> void:
 	tool=""
@@ -428,6 +469,7 @@ func placement_valid(item: Dictionary) -> bool:
 	var area:=Rect2(Vector2(item.x,item.z),size)
 	if area.position.x<.05 or area.end.x>3.95 or area.position.y<.32 or area.end.y>depth()-.1: return false
 	if area.intersects(Rect2(.55,0,1.15,1)): return false
+	if area.grow(.18).has_point(player_pos): return false
 	for other in items:
 		if other.room==room and int(other.id)!=selected_id:
 			if area.grow(.04).intersects(Rect2(Vector2(other.x,other.z),item_size(other))): return false
@@ -445,17 +487,39 @@ func update_goals() -> void:
 	goals_label.text="\n".join(lines)
 
 func load_state() -> void:
-	if save_active or save_pending: return
+	if save_active or save_pending or load_active: return
+	load_active=true
 	ready_to_edit=false
 	status_label.text="Spielstand wird geladen …"
 	var error:=load_http.request(api_url)
-	if error!=OK: status_label.text="Server nicht erreichbar. Erneut laden."
+	if error!=OK:
+		load_active=false
+		status_label.text="Server nicht erreichbar. Erneut laden."
+
+# Validate a complete response before replacing the last usable state.
+func valid_saved_item(item: Variant) -> bool:
+	if not item is Dictionary: return false
+	if not TYPES.has(item.get("type")) or not item.get("room") in ["garage","workshop","oil"]: return false
+	for key in ["id","rot","x","z"]:
+		if not (item.get(key) is float or item.get(key) is int): return false
+		if not is_finite(float(item[key])): return false
+	return float(item.id)==floorf(float(item.id)) and (item.rot==0 or item.rot==1) and item.x>=0 and item.x<=4 and item.z>=0 and item.z<=7
 
 func loaded(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	load_active=false
 	var data: Variant=JSON.parse_string(body.get_string_from_utf8())
 	if code!=200 or not data is Dictionary or not data.get("items") is Array:
 		status_label.text="Server nicht erreichbar. Erneut laden."
 		return
+	if data.items.size()>300 or not data.items.all(valid_saved_item):
+		status_label.text="Ungültiger Spielstand. Erneut laden."
+		return
+	var ids: Dictionary = {}
+	for item in data.items:
+		if ids.has(item.id):
+			status_label.text="Doppelte Möbel-ID. Erneut laden."
+			return
+		ids[item.id]=true
 	items=[]
 	for item in data.items:
 		if item is Dictionary and TYPES.has(item.get("type")) and item.get("room") in ["garage","workshop","oil"]:
@@ -486,12 +550,13 @@ func flush_save() -> void:
 func saved(_result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
 	save_active=false
 	if code!=200:
+		save_pending=true
 		status_label.text="Speichern fehlgeschlagen. Weiteres Einrichten versucht erneut."
 		return
 	status_label.text="Gespeichert · SQLite"
 	flush_save()
 
 func debug_state() -> Dictionary:
-	return {"engine":"Godot 2D","room":room,"person":character_name,"facing":player.facing,"walking":player.walking,"choosingCharacter":picker.visible,"gateOpen":gate_open,"hatchOpen":hatch_open,"position":{"x":player_pos.x,"z":player_pos.y},"pathLength":path.size(),"items":items,"tool":tool,"selected":selected_id,"rotation":rotation_index,"ready":ready_to_edit,"coordinates":"meters; x right, z from back wall to entrance"}
+	return {"savePending":save_pending,"saveActive":save_active,"previewValid":hover_valid,"engine":"Godot 2D","room":room,"person":character_name,"facing":player.facing,"walking":player.walking,"choosingCharacter":picker.visible,"gateOpen":gate_open,"hatchOpen":hatch_open,"position":{"x":player_pos.x,"z":player_pos.y},"pathLength":path.size(),"items":items,"tool":tool,"selected":selected_id,"rotation":rotation_index,"ready":ready_to_edit,"coordinates":"meters; x right, z from back wall to entrance"}
 
 

@@ -5,7 +5,7 @@ const browser=await chromium.launch({args:['--use-gl=angle','--use-angle=swiftsh
 const page=await browser.newPage({viewport:{width:1400,height:930}}),errors=[];
 page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
 await page.route('**/api/state',r=>r.fulfill({json:{items:[]}}));await page.goto('http://127.0.0.1:8085');await page.waitForFunction(()=>window.gabiState?.ready);
-await page.mouse.click(805,612);await page.waitForFunction(()=>window.gabiState.person==='Ela');
+await page.mouse.click(680,612);await page.waitForFunction(()=>window.gabiState.person==='Ela');
 const state=()=>page.evaluate(()=>window.gabiState);
 const pixel=async(x,y)=>{await page.mouse.click(24+x,145+y);};
 const point=async(x,z)=>pixel(170+x*135+z*24,245+z*48);
