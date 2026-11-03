@@ -1,0 +1,16 @@
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const browser=await chromium.launch();const page=await browser.newPage({viewport:{width:1440,height:1100}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+// A browser-only fixture: no real database is read or written by this test.
+await page.route('**/api/state',r=>r.fulfill({json:r.request().method()==='GET'?{items:[]}:{saved:true}}));
+await page.goto('http://127.0.0.1:5173');await page.waitForFunction(()=>window.render_game_to_text);const state=()=>page.evaluate(()=>JSON.parse(window.render_game_to_text()));
+async function click(px,py){const b=await page.locator('canvas').boundingBox();await page.mouse.click(b.x+px*b.width/1000,b.y+py*b.height/690);}
+async function point(x,z){await click(170+x*135+z*24,245+z*48);}
+assert.equal((await state()).choosingCharacter,true);assert.equal((await state()).person,null);assert.equal((await state()).room,'outside');
+fs.mkdirSync('output/controls',{recursive:true});await page.screenshot({path:'output/controls/choice.png',fullPage:true});await page.locator('#select-ela').click();assert.deepEqual((await state()).visibleCharacters,['Ela']);
+const old=(await state()).positions.Ela.x;await point(3.3,6.2);assert((await state()).destination);await page.waitForTimeout(120);let mid=(await state()).positions.Ela.x;assert(mid>old&&mid<3.3,'walk gradually, no teleport');await page.evaluate(()=>advanceTime(2000));assert(Math.abs((await state()).positions.Ela.x-3.3)<.02);
+await click(330,410);assert.equal((await state()).gateOpen,true);await page.screenshot({path:'output/controls/outside.png',fullPage:true});await click(330,410);await page.evaluate(()=>advanceTime(4000));assert.equal((await state()).room,'garage');
+await page.locator('[data-room=workshop]').click();await click(302,182);assert.equal((await state()).hatchOpen,true);assert.equal((await state()).room,'workshop');assert.equal(await page.locator('[data-room=oil]').count(),0);await page.screenshot({path:'output/controls/hatch.png',fullPage:true});await page.locator('#close-hatch').click();assert.equal((await state()).hatchOpen,false);
+await page.locator('[data-type=bench]').click();await point(1.5,2.3);await point(.5,2.6);await page.evaluate(()=>advanceTime(5000));assert(Math.abs((await state()).positions.Ela.x-.5)<.02);await point(3.5,2.6);assert((await state()).pathLength>30,'route around bench');await page.evaluate(()=>advanceTime(5000));assert(Math.abs((await state()).positions.Ela.x-3.5)<.02);await page.screenshot({path:'output/controls/workshop.png',fullPage:true});
+await page.locator('#change-person').click();await page.locator('#select-dirk').click();assert.deepEqual((await state()).visibleCharacters,['Dirk']);await page.setViewportSize({width:390,height:844});await page.locator('#change-person').click();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:'output/controls/mobile-choice.png',fullPage:true});assert.deepEqual(errors,[]);console.log('PASS: mandatory choice, one visible figure, outside start, gradual click walking, sectional gate, entering garage, view-only hatch, obstacle routing, character change, mobile, no browser errors');await browser.close();

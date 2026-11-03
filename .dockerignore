@@ -1,0 +1,7 @@
+*
+!spiel/
+!spiel/server.py
+!godot/
+!godot/Dockerfile
+!godot/build/
+!godot/build/**

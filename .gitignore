@@ -1,0 +1,8 @@
+tools/
+godot/.godot/
+godot/build/
+spiel/node_modules/
+spiel/.npm-cache/
+spiel/output/
+spiel/data/
+spiel/__pycache__/

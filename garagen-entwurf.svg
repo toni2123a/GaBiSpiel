@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="980" viewBox="0 0 1500 980">
+<defs><pattern id="grid" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M35 0H0V35" fill="none" stroke="#d5ded8" stroke-width="1"/></pattern><style>text{font-family:Segoe UI,Arial,sans-serif;fill:#243c36}.title{font-size:30px;font-weight:700}.sub{font-size:16px;fill:#60746b}.label{font-size:19px;font-weight:600}.small{font-size:15px}.dim{font-size:14px;fill:#687b71}.wall{stroke:#354c44;stroke-width:9;fill:none;stroke-linejoin:round}</style></defs>
+<rect width="1500" height="980" fill="#f4f3eb"/>
+<text x="55" y="60" class="title">Die Garage am Hang</text><text x="55" y="91" class="sub">Erste Zeichenvorlage für das Geburtstagsspiel · grob, nicht maßstäblich</text>
+<rect x="35" y="120" width="760" height="725" rx="20" fill="#e6ede6"/>
+<text x="60" y="159" class="label">Haus und Gelände</text><text x="60" y="185" class="sub">Seitenansicht nach Screenshot, Beschreibung und roten Korrekturen</text>
+<!-- hillside and road -->
+<path d="M65 759 L65 812 L765 812 L765 236 Z" fill="#b9c3a0"/><path d="M65 759L765 236" stroke="#83956f" stroke-width="5"/>
+<path d="M57 777H390" stroke="#8c9390" stroke-width="29"/><path d="M60 777H370" stroke="#e5e7de" stroke-width="2" stroke-dasharray="17 14"/>
+<!-- house tall visible facade -->
+<path d="M270 720V365L405 266L542 365V630H430V720Z" fill="#f9f5e8" stroke="#536259" stroke-width="3"/>
+<path d="M253 371L405 251L561 371L542 385L405 283L270 385Z" fill="#a65d47" stroke="#784d3d" stroke-width="3"/>
+<path d="M270 450H542M270 540H542M270 630H542" stroke="#c4c7ba" stroke-width="3"/>
+<g fill="#8ca6a7" stroke="#5a7473" stroke-width="3"><path d="M365 385h84v38h-84zM350 483h46v44h-46zM440 480h68v42h-68zM335 570h38v42h-38zM471 555h23v22h-23z"/></g>
+<rect x="413" y="568" width="30" height="62" fill="#a19177" stroke="#5a6255" stroke-width="3"/><circle cx="437" cy="601" r="2" fill="#394e42"/><g class="dim"><text x="350" y="615">Ebene 2</text><text x="350" y="535">Ebene 3</text><text x="365" y="435">Ebene 4</text><text x="440" y="340">Giebel</text></g>
+<!-- garage cutaway situated at foot -->
+<rect x="288" y="648" width="96" height="72" rx="2" fill="#777e75" stroke="#455c50" stroke-width="3"/><path d="M292 660h88M292 672h88M292 684h88M292 696h88M292 708h88" stroke="#b2b8ac" stroke-width="2"/>
+<path d="M245 732h154l-13 29H232Z" fill="#f7f7ef" stroke="#708582" stroke-width="2"/><path d="M273 735h74l16 12h-100Z" fill="#96b1b8"/>
+<text x="80" y="654" class="label">Garage</text><text x="80" y="680" class="dim">seitlich keine Räume</text><path d="M164 651L281 676" stroke="#426759" stroke-width="2"/>
+<text x="580" y="454" class="label">Steiler Hang</text><text x="580" y="479" class="small">ca. 45° laut Beschreibung</text><text x="553" y="570" class="small">Volle Hausgrundfläche</text><text x="553" y="593" class="small">erst über der Garage</text><path d="M550 600L505 630" stroke="#426759" stroke-width="2" fill="none"/>
+<text x="80" y="826" class="dim">Straßenseite / Zufahrt unten · Garage im Hang, darüber der volle Baukörper</text>
+<!-- floor plan -->
+<rect x="815" y="120" width="650" height="725" rx="20" fill="#fffdf6"/>
+<text x="845" y="159" class="label">Garage und Nebenräume von oben</text>
+<text x="845" y="185" class="sub">Räume hintereinander in Fahrtrichtung angeordnet</text>
+<rect x="970" y="230" width="280" height="550" fill="url(#grid)"/>
+<rect x="975" y="235" width="270" height="86" fill="#e0d7b7"/>
+<rect x="975" y="325" width="270" height="150" fill="#e6dcc8"/>
+<path d="M970 780V230H1250V780M970 325H1035M1100 325H1250M970 480H1035M1100 480H1250" class="wall"/>
+<!-- hatch and firedoor -->
+<path d="M1035 325h65v-9h-65z" fill="#9aa6a5" stroke="#485a58" stroke-width="2"/>
+<path d="M1035 480v-62M1035 418Q1100 418 1100 480" stroke="#8d6750" fill="none" stroke-width="2"/>
+<path d="M970 780h35M1215 780h35" class="wall"/>
+<path d="M1005 780h210" stroke="#949d93" stroke-width="4" stroke-dasharray="10 6"/>
+<text x="1110" y="270" text-anchor="middle" class="label">Öllager</text><text x="1110" y="297" text-anchor="middle" class="dim">Größe offen</text>
+<text x="1110" y="372" text-anchor="middle" class="label">Werkzeugraum</text><text x="1110" y="399" text-anchor="middle" class="dim">ca. 4 × 5 m</text>
+<text x="1110" y="522" text-anchor="middle" class="label">Garage</text><text x="1110" y="547" text-anchor="middle" class="small">ca. 4 × 7 m angenommen</text>
+<!-- Stufe hinauf in die Werkstatt --><rect x="1035" y="481" width="65" height="12" fill="#c8bda5" stroke="#88785e" stroke-width="1.5"/><path d="M1067 502V486m-5 5 5-5 5 5" fill="none" stroke="#596a58" stroke-width="2"/><text x="1270" y="505" class="small">1 Stufe hinauf</text><path d="M1264 500L1102 488" stroke="#967b49" fill="none"/><!-- car -->
+<rect x="1060" y="578" width="100" height="145" rx="15" fill="#f7f8ef" stroke="#74857f" stroke-width="2"/>
+<rect x="1070" y="601" width="80" height="91" rx="8" fill="#bdd0cf"/>
+<rect x="1074" y="620" width="72" height="52" rx="5" fill="#e6ece3"/>
+<path d="M1055 605v24M1165 605v24M1055 686v24M1165 686v24" stroke="#384b44" stroke-width="7"/>
+<text x="1110" y="748" text-anchor="middle" class="dim">Kombi + ca. 1 m ringsum</text>
+<path d="M920 723V580m-10 15 10-15 10 15" fill="none" stroke="#697e6c" stroke-width="3"/><text x="898" y="707" transform="rotate(-90 898 707)" class="dim">Fahrtrichtung</text>
+<text x="1270" y="295" class="small">Wandluke</text><text x="1270" y="317" class="small">mit Stahltür</text><path d="M1264 317L1100 321" stroke="#967b49"/>
+<text x="1270" y="443" class="small">alte</text><text x="1270" y="464" class="small">Brandschutztür</text><path d="M1264 469L1102 480" stroke="#967b49"/>
+<text x="1110" y="816" text-anchor="middle" class="label">Garagentor / Zufahrt</text>
+<text x="55" y="891" class="small">Übernommen: Garage beim weißen Auto · Werkzeugraum an der Stirnwand · Öllager hinter dem Werkzeugraum.</text>
+<text x="55" y="920" class="small">Zugänge nach links versetzt. Eine Stufe hinauf von der Garage in die Werkstatt. Maße des Öllagers noch offen.</text>
+<text x="55" y="949" class="dim">Garage ohne seitliche Räume. Erst darüber beginnt die volle Hausgrundfläche. Fenster und Höhen schematisch.</text>
+</svg>
+
+
+
+
+
+

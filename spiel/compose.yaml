@@ -1,0 +1,12 @@
+services:
+  dirks-garage:
+    build:
+      context: ..
+      dockerfile: godot/Dockerfile
+    ports:
+      - "${GAME_PORT:-8085}:8080"
+    volumes:
+      - game-data:/data
+    restart: unless-stopped
+volumes:
+  game-data:

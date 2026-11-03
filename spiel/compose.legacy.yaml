@@ -1,0 +1,5 @@
+services:
+  dirks-garage:
+    build:
+      context: .
+      dockerfile: Dockerfile
