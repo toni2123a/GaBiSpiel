@@ -19,3 +19,6 @@ Keine neuen Spielsysteme, Servermigration oder neue Abhängigkeiten in diesem Du
 ## Stand nach Umsetzung
 
 P0 und P1 sind umgesetzt und getestet. Die P2-Punkte sind bis auf Escape als explizite Dialogtaste umgesetzt; die Dialoge sind über Fokus und Enter bedienbar. Die Cutout-Erweiterung umfasst Beine, Idle und Aktionsreaktionen, kein vollständiges Gesichtsrig. P3 bleibt offen. Zusätzlich wurde die übergroße Möbel-Klickfläche korrigiert. Details, tatsächliche Testergebnisse und verbleibende Schwächen stehen in QUALITY_REPORT.md.
+
+## Verbindlicher sichtbarer Umbau nach Nutzerreview
+P1: Eigenständige Papier-Cartoon-Art-Direction für alle drei Räume und Möbel. P1: Neue Oberfläche und gestaltete Figurenwahl statt Entwurfspanels. P1: Getrennte Kopf-/Torso-/Beinbewegungen, Blinzeln und Interaktionsreaktionen. P2: Native Sounds, Pause/Tonsteuerung, kontextabhängige Hinweise und größere Bedienelemente. P2: Szenische Details, mehrere Hintergrundebenen und animierte Toröffnung. Abnahme: Vorher/Nachher-Bilder aller Räume und Figuren, vollständige Kernregression sowie Tests der neuen Steuerung. Die Tests allein ersetzen die Bildkontrolle nicht.

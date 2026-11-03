@@ -6,3 +6,5 @@ spiel/.npm-cache/
 spiel/output/
 spiel/data/
 spiel/__pycache__/
+
+.playwright-mcp/
