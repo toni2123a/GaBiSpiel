@@ -1,85 +1,32 @@
-import {chromium} from 'playwright';
+import {openGame} from './godot-test-helpers.mjs';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-
-const browser=await chromium.launch({args:['--use-gl=angle','--use-angle=swiftshader']});
-const page=await browser.newPage({viewport:{width:1400,height:930}});
-const errors=[];
-page.on('pageerror',e=>errors.push(String(e)));
-page.on('console',m=>{if(m.type()==='error' && !m.text().includes('503')) errors.push(m.text());});
-let fixture={items:[{type:'bench',room:'workshop'}]},failSave=true,saves=0;
-await page.route('**/api/state',async route=>{
-  if(route.request().method()==='GET') return route.fulfill({json:fixture});
-  saves++;
-  if(failSave) return route.fulfill({status:503,json:{error:'QA outage'}});
-  fixture=route.request().postDataJSON();
-  return route.fulfill({json:{saved:true}});
-});
-const state=()=>page.evaluate(()=>window.gabiState);
-const click=async(x,y)=>{await page.mouse.click(x,y);await page.waitForTimeout(180);};
-const point=async(x,z)=>click(24+170+x*135+z*24,145+245+z*48);
-const advance=async()=>{await page.evaluate(()=>advanceTime(5000));await page.waitForTimeout(180);};
-fs.mkdirSync('output/quality',{recursive:true});
-try {
-  await page.goto('http://127.0.0.1:8085');
-  await page.waitForFunction(()=>window.gabiState?.choosingCharacter);
-  await page.waitForTimeout(600);
-  assert.equal((await state()).ready,false,'malformed furniture must not unlock editing');
-  assert.deepEqual((await state()).items,[]);
-  // The modal starts with Dirk focused and is usable with the keyboard.
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(()=>window.gabiState.person==='Dirk');
-  fixture={items:[]};
-  await click(1200,65);
-  await page.waitForFunction(()=>window.gabiState.ready);
-  const valid={id:1,type:'bench',room:'workshop',x:1.5,z:2.3,rot:0};
-  for(const items of [[{...valid,x:'1.5'}],[{...valid,rot:.5}],[valid,{...valid}]]) {
-    fixture={items};
-    await click(1200,65);
-    assert.equal((await state()).ready,false,'invalid fields and duplicate IDs rejected');
-    assert.deepEqual((await state()).items,[],'last usable state retained');
+let fixture={items:[{type:'bench',room:'workshop'}]},fail=true,saves=0,gets=0;
+const g=await openGame({waitReady:false,routeHandler:async r=>{
+ if(r.request().method()==='GET'){gets++;return r.fulfill({json:fixture});}
+ saves++;if(fail)return r.fulfill({status:503,json:{error:'QA outage'}});
+ fixture=r.request().postDataJSON();return r.fulfill({json:{saved:true}});
+}});
+try{
+ await g.settle();assert.equal((await g.state()).ready,false);assert.deepEqual((await g.state()).items,[]);await g.choose('Dirk');
+ await g.ui('menu');fixture={items:[]};await g.ui('reload');await g.page.waitForFunction(()=>window.gabiState?.ready);
+ const valid={id:1,type:'bench',room:'workshop',x:1.5,z:2.3,rot:0};
+ for(const items of [[{...valid,x:'1.5'}],[{...valid,rot:.5}],[{...valid,scale:'big'}],[{...valid,scale:4}],[valid,{...valid}]]){
+  fixture={items};await g.ui('reload');assert.equal((await g.state()).ready,false);assert.deepEqual((await g.state()).items,[]);
+ }
+ fixture={items:[],unlocks:[]};await g.ui('reload');await g.page.waitForFunction(()=>window.gabiState?.ready);await g.ui('room_workshop');
+ await g.ui('build');await g.ui('item_bench');const s=await g.state();await g.page.mouse.move(s.worldOrigin.x+(170+3.1*135+2*24)*s.worldScale,s.worldOrigin.y+(245+2*48)*s.worldScale);await g.settle();assert.equal((await g.state()).previewValid,false);
+ await g.page.keyboard.press('r');await g.page.waitForFunction(()=>window.gabiState?.previewValid);await g.page.keyboard.press('Escape');await g.settle();
+ await g.place('bench',2.3,4.1);assert.equal((await g.state()).items.length,0);await g.point(1.5,2.3);await g.page.waitForFunction(()=>window.gabiState?.savePending&&!window.gabiState.saveActive);assert.equal(saves,1);
+ await g.ui('menu');const getCount=gets;await g.ui('reload',true);assert.equal(gets,getCount,'reload disabled while unsaved');fail=false;await g.ui('retry');await g.page.waitForFunction(()=>!window.gabiState?.savePending&&!window.gabiState?.saveActive);assert.equal(saves,2);await g.ui('resume');
+ await g.ui('build');await g.page.keyboard.press('Escape');await g.settle();assert.equal((await g.state()).ui.palette,false);
+ await g.pixel(302,182);assert((await g.state()).hatchOpen);await g.page.keyboard.press('Escape');await g.settle();assert.equal((await g.state()).hatchOpen,false);
+ await g.point(2.2,.6);await g.advance();await g.shot('behind-bench');await g.point(2.2,4.0);await g.advance();await g.shot('in-front-of-bench');
+ for(const viewport of [{width:1400,height:930},{width:390,height:844}]){
+  await g.page.setViewportSize(viewport);await g.settle();await g.room('workshop');const ui=(await g.state()).ui.targets;
+  for(const name of ['figures','build','menu','quests']){
+   const a=ui.interact,b=ui[name];assert(b.visible);assert(b.x-b.w/2>=0&&b.x+b.w/2<=viewport.width,'dock stays inside viewport');
+   if(a.visible)assert(Math.abs(a.x-b.x)>=(a.w+b.w)/2||Math.abs(a.y-b.y)>=(a.h+b.h)/2,'exit hint must not overlap dock');
   }
-  fixture={items:[]};
-  await click(1200,65);
-  await page.waitForFunction(()=>window.gabiState.ready);
-  await click(435,120);
-  await click(1130,317);
-  await page.mouse.move(24+170+3.1*135+2*24,145+245+2*48);
-  await page.waitForTimeout(180);
-  assert.equal((await state()).previewValid,false,'wide bench crosses wall');
-  await page.screenshot({path:'output/quality/invalid-placement.png'});
-  await page.keyboard.press('r');
-  await page.waitForFunction(()=>window.gabiState.previewValid);
-  await page.keyboard.press('Escape');
-  await click(1130,317);
-  await point(2.3,4.1);
-  assert.equal((await state()).items.length,0,'cannot place furniture on player');
-  await point(1.5,2.3);
-  await page.waitForFunction(()=>window.gabiState.savePending && !window.gabiState.saveActive);
-  assert.equal(saves,1);
-  await click(1200,65);
-  assert.equal((await state()).items.length,1,'reload cannot discard unsaved changes');
-  failSave=false;
-  await click(1200,800);
-  await page.waitForFunction(()=>!window.gabiState.savePending && !window.gabiState.saveActive);
-  assert.equal(saves,2);
-  assert.equal(fixture.items.length,1);
-  await point(2.2,.6);await advance();
-  assert.equal((await state()).tool,'');
-  assert(Math.abs((await state()).position.z-.6)<.02);
-  await page.screenshot({path:'output/quality/behind-bench.png'});
-  await point(2.2,4.0);await advance();
-  assert(Math.abs((await state()).position.z-4.0)<.02);
-  await page.screenshot({path:'output/quality/in-front-of-bench.png'});
-  await click(24+302,145+182);
-  assert.equal((await state()).hatchOpen,true);
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(()=>!window.gabiState.hatchOpen);
-  await page.reload();
-  await page.waitForFunction(()=>window.gabiState?.ready);
-  assert.equal((await state()).items.length,1,'retried state loads again');
-  assert.deepEqual(errors,[]);
-  console.log('PASS: malformed load recovery, keyboard modal focus, immediate rotation preview, player clearance, failed save retained and retried, reload protection, depth screenshots, keyboard hatch close');
-} finally {
-  await browser.close();
-}
+ }
+ assert.deepEqual(g.errors,[]);console.log('PASS: malformed saves rejected, recovery, rotation preview, player clearance, failed save retained/retried, keyboard modal close, HUD spacing desktop/mobile');
+}catch(error){console.log('QA FAILURE',gets,saves,JSON.stringify(await g.state()),g.errors);await g.shot('quality-failure');throw error;}finally{await g.browser.close();}

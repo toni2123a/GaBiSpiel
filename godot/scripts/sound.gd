@@ -30,6 +30,7 @@ func make_sample(cue: String) -> AudioStreamWAV:
 		"gate": length=.32; frequency=85; noise=.25
 		"error": length=.17; frequency=140; noise=.02
 		"welcome": length=.27; frequency=610; noise=.01
+		"radio": length=.38; frequency=330+float(cursor%4)*55; noise=.01
 	var bytes := PackedByteArray()
 	var count := int(length*22050)
 	bytes.resize(count*2)

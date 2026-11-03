@@ -21,12 +21,30 @@ func unproject(point: Vector2) -> Vector2:
 	return Vector2((point.x-170-z*24)/135,z)
 
 func outdoor_surfaces() -> Array[PackedVector2Array]:
-	return [PackedVector2Array([p(0,4.5),p(4,4.5),p(4,7),p(0,7)]),PackedVector2Array([Vector2(245,465),Vector2(445,465),Vector2(332,561),Vector2(130,645),Vector2(0,645),Vector2(0,600),Vector2(150,540)])]
+	return [
+		PackedVector2Array([p(0,4.5),p(4,4.5),p(4,7),p(0,7)]),
+		PackedVector2Array([Vector2(245,465),Vector2(445,465),Vector2(332,561),Vector2(130,645),Vector2(0,645),Vector2(0,600),Vector2(150,540)]),
+		PackedVector2Array([Vector2(515,385),Vector2(578,385),Vector2(657,512),Vector2(590,512)]),
+		PackedVector2Array([Vector2(480,348),Vector2(710,348),Vector2(753,396),Vector2(515,396)]),
+		PackedVector2Array([Vector2(703,373),Vector2(748,399),Vector2(817,276),Vector2(769,251)]),
+		PackedVector2Array([Vector2(750,246),Vector2(965,246),Vector2(995,293),Vector2(775,293)])
+	]
 
 func outdoor_walkable(point: Vector2) -> bool:
+	var pixel := p(point.x,point.y)
+	if Rect2(834,230,105,42).has_point(pixel): return false
 	for surface in outdoor_surfaces():
-		if Geometry2D.is_point_in_polygon(p(point.x,point.y),surface): return true
+		if Geometry2D.is_point_in_polygon(pixel,surface): return true
 	return false
+
+func outdoor_level(point: Vector2) -> String:
+	var pixel := p(point.x,point.y)
+	var surfaces := outdoor_surfaces()
+	if Geometry2D.is_point_in_polygon(pixel,surfaces[5]): return "carport"
+	if Geometry2D.is_point_in_polygon(pixel,surfaces[4]): return "upper_stairs"
+	if Geometry2D.is_point_in_polygon(pixel,surfaces[3]): return "terrace"
+	if Geometry2D.is_point_in_polygon(pixel,surfaces[2]): return "lower_stairs"
+	return "yard"
 
 func _process(delta: float) -> void:
 	if game == null: return
@@ -93,8 +111,8 @@ func outside() -> void:
 		draw_line(pos,pos+Vector2(-4,-8),Color("4b795e"),2)
 		draw_line(pos,pos+Vector2(6,-6),Color("4b795e"),2)
 	# A layered paving edge reads as a paper cutout rather than a grey polygon.
-	for surface in outdoor_surfaces():
-		var shadow := surface.duplicate()
+	for surface in outdoor_surfaces().slice(0,2):
+		var shadow: PackedVector2Array=surface.duplicate()
 		for i in range(shadow.size()): shadow[i]+=Vector2(0,8)
 		draw_colored_polygon(shadow,Color("405c50"))
 		polygon(Array(surface),Color("d6c5a0"),3)
@@ -116,9 +134,10 @@ func outside() -> void:
 		draw_circle(Vector2(666+sin(time+n)*8,27-drift),10+drift*.13,Color(1,.94,.8,.16*(1-drift/90)))
 	for r in [Rect2(405,140,106,42),Rect2(330,210,51,45),Rect2(510,210,98,45),Rect2(340,290,45,48)]: window_art(r)
 	for y in [193,272,347]: draw_line(Vector2(232,y),Vector2(699,y),Color("b99268"),3)
-	draw_rect(Rect2(435,285,35,65),Color("ab654d"))
-	draw_rect(Rect2(435,285,35,65),INK,false,3)
-	draw_circle(Vector2(461,318),3,GOLD)
+	draw_rect(Rect2(575,280,38,70),Color("ab654d"))
+	draw_rect(Rect2(575,280,38,70),INK,false,3)
+	draw_circle(Vector2(605,317),3,GOLD)
+	terrace_and_carport()
 	# The door travels upward; click logic continues to use the same entrance.
 	draw_rect(Rect2(241,356,208,113),Color("c48d60"))
 	draw_rect(Rect2(245,360,200,105),INK)
@@ -137,14 +156,13 @@ func outside() -> void:
 	plate(Rect2(244,327,177,29),Color("244842"))
 	label("DIRKS GARAGE",Vector2(255,349),17,PAPER)
 	bunting(Vector2(232,162),Vector2(699,162),12)
-	plant(Vector2(493,431),1.0)
+	plant(Vector2(214,440),.8)
 	plant(Vector2(685,337),.72)
-	polygon([Vector2(749,370),Vector2(972,370),Vector2(965,471),Vector2(742,477)],Color("e8bd6d"))
-	draw_rect(Rect2(770,474,10,43),INK)
-	draw_rect(Rect2(938,473,10,43),INK)
-	label("HEUTE: GaBi",Vector2(763,405),29)
-	label("MORGEN: MAL SEHEN.",Vector2(762,433),15)
-	label("Tor anklicken. Feierabend an.",Vector2(745,540),15,PAPER)
+	polygon([Vector2(27,452),Vector2(175,452),Vector2(170,527),Vector2(22,532)],Color("e8bd6d"))
+	draw_rect(Rect2(42,529,8,35),INK)
+	draw_rect(Rect2(150,529,8,35),INK)
+	label("HEUTE: GaBi",Vector2(36,483),20)
+	label("MORGEN: MAL SEHEN.",Vector2(34,508),10)
 	# Main road and foreground framing.
 	draw_rect(Rect2(0,645,1000,45),Color("354e50"))
 	draw_line(Vector2(0,646),Vector2(1000,646),INK,4)
@@ -155,6 +173,42 @@ func outside() -> void:
 		draw_line(Vector2(x,625),Vector2(x,685),Color("253f3d"),9)
 		draw_line(Vector2(x-8,625),Vector2(x+8,625),Color("253f3d"),4)
 	draw_line(Vector2(858,647),Vector2(1000,647),Color("253f3d"),7)
+
+func terrace_and_carport() -> void:
+	var surfaces := outdoor_surfaces()
+	# The terrace and both stair flights are the exact same polygons as AStar.
+	polygon([Vector2(480,348),Vector2(710,348),Vector2(753,405),Vector2(515,405)],Color("8c7056"))
+	polygon(Array(surfaces[3]),Color("d6b88b"))
+	for n in range(1,8): draw_line(Vector2(485+n*27,350),Vector2(520+n*28,394),Color("b49870"),1)
+	staircase(surfaces[2],10)
+	staircase(surfaces[4],10)
+	polygon(Array(surfaces[5]),Color("c6b58f"))
+	# The upper parking bay has a roof, rear beam and structural posts.
+	for x in [762,965]:
+		draw_rect(Rect2(x,174,9,110),Color("715948"))
+		draw_rect(Rect2(x,174,9,110),INK,false,2)
+	polygon([Vector2(737,158),Vector2(953,158),Vector2(996,191),Vector2(774,191)],Color("b66b4f"))
+	polygon([Vector2(774,191),Vector2(996,191),Vector2(996,201),Vector2(774,201)],Color("874c3d"))
+	for n in range(7): draw_line(Vector2(757+n*28,160),Vector2(791+n*28,189),Color("d59566"),2)
+	# A parked car is a solid navigation obstacle, not just background paint.
+	polygon([Vector2(835,244),Vector2(854,226),Vector2(906,226),Vector2(927,245)],Color("dc9c55"))
+	polygon([Vector2(855,231),Vector2(879,231),Vector2(879,244),Vector2(843,244)],Color("9ec0b4"),1)
+	polygon([Vector2(885,231),Vector2(902,231),Vector2(918,244),Vector2(885,244)],Color("9ec0b4"),1)
+	polygon([Vector2(834,245),Vector2(940,245),Vector2(935,264),Vector2(837,264)],Color("dc9c55"))
+	for x in [853,920]:
+		draw_circle(Vector2(x,265),8,INK)
+		draw_circle(Vector2(x,265),4,Color("96afa0"))
+	label("CARPORT",Vector2(823,217),16,PAPER)
+	label("TERRASSE",Vector2(620,381),12,INK)
+
+func staircase(surface: PackedVector2Array,count: int) -> void:
+	polygon(Array(surface),Color("a68a66"))
+	for n in range(count+1):
+		var t := float(n)/count
+		var a := surface[0].lerp(surface[3],t)
+		var b := surface[1].lerp(surface[2],t)
+		draw_line(a,b,Color("e3cc9e"),4,true)
+		draw_line(a+Vector2(0,3),b+Vector2(0,3),Color("8c745b"),1,true)
 
 func window_art(rect: Rect2) -> void:
 	draw_rect(rect.grow(5),Color("ba8f64"))
@@ -191,8 +245,8 @@ func inside() -> void:
 	draw_rect(Rect2(0,0,1000,690),Color("244b49"))
 	draw_rect(Rect2(0,0,1000,45),Color("193b3c"))
 	for x in range(0,1000,80): draw_line(Vector2(x,45),Vector2(x,690),Color("295450"),2)
-	label("DER GABI-TREFFPUNKT" if workshop else "DIRKS REVIER",Vector2(35,39),16,Color("91b6a0"))
-	label("02 / WERKSTATT" if workshop else "01 / GARAGE",Vector2(755,39),15,Color("91b6a0"))
+
+
 	var floor: Array=[p(0,0),p(4,0),p(4,depth),p(0,depth)]
 	polygon([p(0,depth),p(4,depth),p(4,depth)+Vector2(0,18),p(0,depth)+Vector2(0,18)],Color("694d3c"),3)
 	polygon(floor,Color("ceac76") if workshop else Color("9ca8a0"))
@@ -268,7 +322,7 @@ func sync_furniture() -> void:
 		if piece.item!=item or last_selected!=game.selected_id:
 			piece.item=item.duplicate()
 			piece.queue_redraw()
-		piece.z_index=-1 if game.is_wall_item(item) else roundi((float(item.z)+game.item_size(item).y)*100)
+		piece.z_index=1 if game.is_wall_item(item) else roundi((float(item.z)+game.item_size(item).y)*100)
 		piece.modulate.a=.55 if id==-1 else 1.0
 	for id in furniture_nodes.keys():
 		if not id in active:

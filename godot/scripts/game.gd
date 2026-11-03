@@ -47,6 +47,12 @@ var bridge_callback: JavaScriptObject
 var bridge_clock: float = 0
 var interface: RefCounted
 var sound: Node
+var drinks: Node
+var radio_on: bool = false
+var radio_clock: float = 0
+var seated: bool = false
+var seat_exit := Vector2.ZERO
+var seat_id: int = 0
 var ambient_motion: bool = true
 var keyboard_motion := Vector2.ZERO
 var step_clock: float = 0
@@ -75,6 +81,10 @@ func _ready() -> void:
 	add_child(sound)
 	get_window().content_scale_mode=Window.CONTENT_SCALE_MODE_DISABLED
 	setup_ui()
+	drinks=Node.new()
+	drinks.set_script(preload("res://scripts/drinks.gd"))
+	drinks.game=self
+	add_child(drinks)
 	fit_world(0)
 	load_http = HTTPRequest.new()
 	add_child(load_http)
@@ -88,7 +98,7 @@ func _ready() -> void:
 		api_url = str(JavaScriptBridge.eval("new URL('api/state', document.baseURI).href"))
 		bridge_callback = JavaScriptBridge.create_callback(advance_from_js)
 		JavaScriptBridge.get_interface("window").gabiAdvance = bridge_callback
-		JavaScriptBridge.eval("window.render_game_to_text = () => JSON.stringify(window.gabiState || {}); window.advanceTime = ms => window.gabiAdvance(ms);")
+		JavaScriptBridge.eval("window.render_game_to_text = () => JSON.stringify(window.gabiState || {}); window.advanceTime = ms => window.gabiAdvance(ms); document.querySelector('canvas').addEventListener('contextmenu', e => e.preventDefault());")
 	load_state()
 	picker.popup_centered()
 	world.queue_redraw()
@@ -169,6 +179,7 @@ func depth() -> float:
 	return 5.0 if room=="workshop" else 7.0
 
 func change_room(value: String) -> void:
+	stand_up()
 	if not value in ["outside","garage","workshop"]:
 		return
 	room=value
@@ -180,6 +191,7 @@ func change_room(value: String) -> void:
 	transition_tween=create_tween()
 	transition_tween.tween_property(transition,"color:a",0.0,.24).set_trans(Tween.TRANS_SINE)
 	player_pos=Vector2(2.3,6.2 if room=="outside" else depth()-.9)
+	player_pos=free_spawn(player_pos)
 	path.clear()
 	arrival=""
 	cancel_tool()
@@ -205,6 +217,7 @@ func blocked(point: Vector2) -> bool:
 	return false
 
 func walk_to(point: Vector2, action: String = "") -> void:
+	stand_up()
 	if blocked(point):
 		sound.play("error")
 		speech.text="Da ist kein Platz zum Stehen."
@@ -269,6 +282,7 @@ func _physics_process(delta: float) -> void:
 		return
 	keyboard_motion=Vector2(float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))-float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)),float(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN))-float(Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP))).normalized()
 	if keyboard_motion!=Vector2.ZERO:
+		stand_up()
 		path.clear()
 		arrival=""
 		var amount := 2.2*delta
@@ -297,7 +311,18 @@ func _physics_process(delta: float) -> void:
 	if path.is_empty() and arrival!="":
 		var next:=arrival
 		arrival=""
-		change_room(next)
+		if next.begins_with("sit:"):
+			var id := int(next.trim_prefix("sit:"))
+			for item in items:
+				if int(item.id)==id:
+					seat_exit=player_pos
+					var size := item_size(item)
+					player_pos=Vector2(item.x+size.x*.5,item.z+size.y*.65)
+					seated=true
+					seat_id=id
+					player.scale=Vector2(1,.88)
+					speech.text="Feierabend. Zum Aufstehen einfach weiterlaufen."
+		else: change_room(next)
 	if player.walking or player_pos!=old_position:
 		step_clock+=delta
 		if step_clock>.32:
@@ -308,6 +333,11 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	fit_world(delta)
 	interface.update(delta)
+	if radio_on and not interface.blocked():
+		radio_clock+=delta
+		if radio_clock>1.0:
+			radio_clock=0
+			sound.play("radio")
 	player.set_process(not interface.pause_window.visible)
 	transition.size=get_viewport_rect().size
 	if not OS.has_feature("web"):
@@ -322,8 +352,11 @@ func advance_from_js(arguments: Array) -> void:
 		_physics_process(float(arguments[0])/1000.0)
 
 func refresh() -> void:
-	player.position=world.p(player_pos.x,player_pos.y)
+	player.position=world.p(player_pos.x,player_pos.y,33 if seated else 0)
 	player.z_index=roundi(player_pos.y*100)
+	if seated:
+		for item in items:
+			if int(item.id)==seat_id: player.z_index=roundi((float(item.z)+item_size(item).y)*100)+1
 	world.sync_furniture()
 	# Face the current path segment, skipping the waypoint at the starting position.
 	var direction := keyboard_motion
@@ -335,9 +368,9 @@ func refresh() -> void:
 	world.queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if interface.context.visible and event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:
+	if interface.context.visible and event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]:
 		cancel_tool()
-		click_world(world.get_local_mouse_position())
+		click_world(world.get_local_mouse_position(),event.button_index==MOUSE_BUTTON_RIGHT)
 		return
 	if character_name=="" or interface.blocked():
 		return
@@ -351,15 +384,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		set_hover(world.get_local_mouse_position())
 		update_preview()
 		world.queue_redraw()
-	if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:
-		click_world(world.get_local_mouse_position())
+	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]:
+		click_world(world.get_local_mouse_position(),event.button_index==MOUSE_BUTTON_RIGHT or interface.touch_edit)
 
-func click_world(pixel: Vector2) -> void:
+func click_world(pixel: Vector2,edit_request: bool = false) -> void:
 	interface.context.hide()
 	if not Rect2(0,0,1000,690).has_point(pixel) or not ready_to_edit:
 		return
 	var point: Vector2=world.unproject(pixel).snapped(Vector2(.1,.1))
 	if room=="outside":
+		if edit_request: return
 		if Rect2(245,348,200,117).has_point(pixel):
 			if not gate_open:
 				gate_open=true
@@ -368,6 +402,10 @@ func click_world(pixel: Vector2) -> void:
 				speech.text="Sektionaltor offen. Nochmal klicken zum Reingehen."
 			else:
 				walk_to(Vector2(1,4.6),"garage")
+		elif Rect2(568,275,54,76).has_point(pixel):
+			walk_to(world.unproject(Vector2(595,369)))
+		elif Rect2(834,230,105,42).has_point(pixel):
+			walk_to(world.unproject(Vector2(875,282)))
 		else:
 			walk_to(point)
 		refresh()
@@ -377,6 +415,9 @@ func click_world(pixel: Vector2) -> void:
 		sound.play("gate")
 		path.clear()
 		oil_window.popup_centered()
+		return
+	if edit_request and tool!="":
+		cancel_tool()
 		return
 	if tool!="":
 		set_hover(pixel)
@@ -400,7 +441,8 @@ func click_world(pixel: Vector2) -> void:
 			if wall_rect(item).has_point(pixel):
 				selected_id=int(item.id)
 				path.clear()
-				interface.show_context(item,world.to_global(pixel))
+				if edit_request: interface.show_context(item,world.to_global(pixel))
+				else: use_item(item)
 				refresh()
 				return
 			continue
@@ -408,14 +450,18 @@ func click_world(pixel: Vector2) -> void:
 		var corners := PackedVector2Array()
 		for offset in [Vector2.ZERO,Vector2(size.x,0),size,Vector2(0,size.y)]:
 			corners.append(world.p(item.x+offset.x,item.z+offset.y))
-			corners.append(world.p(item.x+offset.x,item.z+offset.y,FURNITURE_HEIGHTS[item.type]))
+			corners.append(world.p(item.x+offset.x,item.z+offset.y,FURNITURE_HEIGHTS[item.type]*float(item.get("scale",1.0))))
 		if Geometry2D.is_point_in_polygon(pixel,Geometry2D.convex_hull(corners)):
 			selected_id=int(item.id)
 			path.clear()
 			keyboard_motion=Vector2.ZERO
-			interface.show_context(item,world.to_global(pixel))
+			if edit_request: interface.show_context(item,world.to_global(pixel))
+			else: use_item(item)
 			refresh()
 			return
+	if edit_request:
+		cancel_tool()
+		return
 	if room=="garage" and pixel.y<245 and pixel.x>245 and pixel.x<385:
 		walk_to(Vector2(1.1,.5),"workshop")
 	elif point.y>depth():
@@ -531,6 +577,7 @@ func loaded(_result: int, code: int, _headers: PackedStringArray, body: PackedBy
 			item.h=float(item.get("h",110.0))
 			items.append(item)
 	ready_to_edit=true
+	player_pos=free_spawn(player_pos)
 	evaluate_quests()
 	status_label.text="Geladen · gemeinsamer Spielstand"
 	update_goals()
@@ -562,6 +609,18 @@ func saved(_result: int, code: int, _headers: PackedStringArray, _body: PackedBy
 	status_label.text="Alles steht. Alles gespeichert."
 	flush_save()
 
+func free_spawn(preferred: Vector2) -> Vector2:
+	if not blocked(preferred): return preferred
+	var best := preferred
+	var distance := INF
+	for x in range(2,39,2):
+		for z in range(5,int(depth()*10)-1,2):
+			var point := Vector2(x,z)*.1
+			if not blocked(point) and preferred.distance_squared_to(point)<distance:
+				distance=preferred.distance_squared_to(point)
+				best=point
+	return best
+
 func is_wall_type(type: String) -> bool:
 	return bool(TYPES[type].get("wall",false))
 
@@ -574,7 +633,7 @@ func wall_dimensions(item: Dictionary) -> Vector2:
 	return Vector2(size.y,size.x) if int(item.get("rot",0))%2==1 else size
 
 func wall_rect(item: Dictionary) -> Rect2:
-	var center := world.p(item.x,0,float(item.get("h",110.0)))
+	var center: Vector2=world.p(item.x,0,float(item.get("h",110.0)))
 	var size := wall_dimensions(item)
 	return Rect2(center-size*.5,size)
 
@@ -695,6 +754,39 @@ func interact() -> void:
 		"oil": click_world(Vector2(302,182))
 		"exit": change_room("outside" if room=="garage" else "garage")
 
+func stand_up() -> void:
+	if seated: player_pos=seat_exit
+	seated=false
+	seat_id=0
+	if player!=null: player.scale=Vector2.ONE
+
+func use_item(item: Dictionary) -> void:
+	path.clear()
+	keyboard_motion=Vector2.ZERO
+	match item.type:
+		"fridge": drinks.open()
+		"beer": drinks.open("beer")
+		"bench":
+			interface.quests_body.text=quest_text()
+			interface.quests_window.popup_centered()
+		"tools": interface.toggle_palette()
+		"radio":
+			radio_on=not radio_on
+			speech.text="Radio an. Der Feierabend hat einen Soundtrack." if radio_on else "Radio aus. Jetzt hört man die guten Gespräche."
+			sound.play("radio")
+		"sofa":
+			if seated: stand_up()
+			else:
+				var size := item_size(item)
+				var destinations := [Vector2(item.x+size.x*.5,item.z+size.y+.25),Vector2(item.x-.25,item.z+size.y*.5),Vector2(item.x+size.x+.25,item.z+size.y*.5)]
+				for destination in destinations:
+					if not blocked(destination):
+						walk_to(destination,"sit:"+str(item.id))
+						break
+		_: speech.text="Rechtsklick zum Gestalten: drehen, verschieben, Größe ändern."
+	selected_id=0
+	world.sync_furniture()
+
 func selected_item() -> Dictionary:
 	for item in items:
 		if int(item.id)==selected_id: return item
@@ -724,6 +816,7 @@ func duplicate_selected() -> void:
 
 func delete_selected() -> void:
 	if selected_id==0: return
+	if selected_id==seat_id: stand_up()
 	items=items.filter(func(i): return int(i.id)!=selected_id)
 	cancel_tool()
 	sound.play("place")
@@ -768,6 +861,4 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func debug_state() -> Dictionary:
-	return {"ui":interface.debug_state(),"worldOrigin":{"x":world.position.x,"y":world.position.y},"worldScale":world.scale.x,"ambientMotion":ambient_motion,"unlocks":unlocks,"sound":sound.enabled,"savePending":save_pending,"saveActive":save_active,"previewValid":hover_valid,"engine":"Godot 2D","room":room,"person":character_name,"facing":player.facing,"walking":player.walking,"choosingCharacter":picker.visible,"gateOpen":gate_open,"hatchOpen":hatch_open,"position":{"x":player_pos.x,"z":player_pos.y},"pathLength":path.size(),"items":items,"tool":tool,"selected":selected_id,"rotation":rotation_index,"ready":ready_to_edit,"coordinates":"meters; x right, z from back wall to entrance"}
-
-
+	return {"status":status_label.text,"loadActive":load_active,"drinkLoading":drinks.catalog_loading,"drinkChoice":drinks.selected_drink().get("name",""),"heldDrink":drinks.held_drink,"drinkOpen":drinks.chooser.visible,"drinkEditor":drinks.editor.visible,"radio":radio_on,"seated":seated,"outdoorLevel":world.outdoor_level(player_pos) if room=="outside" else "","ui":interface.debug_state(),"worldOrigin":{"x":world.position.x,"y":world.position.y},"worldScale":world.scale.x,"ambientMotion":ambient_motion,"unlocks":unlocks,"sound":sound.enabled,"savePending":save_pending,"saveActive":save_active,"previewValid":hover_valid,"engine":"Godot 2D","room":room,"person":character_name,"facing":player.facing,"walking":player.walking,"choosingCharacter":picker.visible,"gateOpen":gate_open,"hatchOpen":hatch_open,"position":{"x":player_pos.x,"z":player_pos.y},"pathLength":path.size(),"items":items,"tool":tool,"selected":selected_id,"rotation":rotation_index,"ready":ready_to_edit,"coordinates":"meters; x right, z from back wall to entrance"}

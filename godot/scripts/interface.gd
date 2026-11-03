@@ -10,6 +10,8 @@ var person: Button
 var build: Button
 var menu: Button
 var quests_button: Button
+var edit_button: Button
+var touch_edit: bool = false
 var quests_window: Window
 var quests_body: Label
 var quests_close: Button
@@ -65,6 +67,10 @@ func _init(owner_game: Node2D) -> void:
 	menu=make_button(layer,"",func(): toggle_pause(),"menu")
 	quests_button=make_button(layer,"",func(): quests_body.text=game.quest_text(); quests_window.popup_centered(),"quests")
 	icon(quests_button,"tasks","Aufgaben & Belohnungen")
+	edit_button=make_button(layer,"",func():
+		touch_edit=not touch_edit
+		game.speech.text="Bearbeiten: Möbel antippen. Zum Benutzen wieder ausschalten." if touch_edit else "Benutzen: Möbel antippen.","edit_mode")
+	icon(edit_button,"edit","Möbel bearbeiten / benutzen")
 	icon(person,"person","Figur wechseln")
 	icon(build,"build","Einrichten · B")
 	icon(menu,"menu","Menü · Esc")
@@ -73,6 +79,7 @@ func _init(owner_game: Node2D) -> void:
 	status=game.make_label(layer,"Spielstand wird geladen …",Rect2(),12)
 	status.add_theme_color_override("font_color",Color("bdd5be"))
 	toast=panel(layer)
+	toast.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	speech=game.make_label(toast,"Dirk, Ela oder Silas auswählen und zur GaBi vorbeikommen.",Rect2(16,9,700,30),16)
 	speech.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	hint=make_button(layer,"E  Tor öffnen",func(): game.interact(),"interact")
@@ -154,6 +161,12 @@ func popup(title: String) -> Window:
 	window.transient=true
 	window.unresizable=true
 	window.borderless=true
+	window.window_input.connect(func(event: InputEvent):
+		if event is InputEventKey and event.pressed and event.keycode==KEY_ESCAPE:
+			if window==picker and game.character_name=="": return
+			if window==oil: game.close_hatch()
+			else: window.hide()
+			window.set_input_as_handled())
 	game.add_child(window)
 	var background := Panel.new()
 	background.add_theme_stylebox_override("panel",game.panel_style(Color("234c4a")))
@@ -217,6 +230,7 @@ func build_pause() -> void:
 	pause_buttons.append(make_button(pause_window,"Vollbild",game.toggle_fullscreen,"fullscreen"))
 	pause_buttons.append(make_button(pause_window,"Spielstand erneut laden",game.load_state,"reload"))
 	pause_buttons.append(make_button(pause_window,"Speichern wiederholen",game.flush_save,"retry"))
+	pause_buttons.append(make_button(pause_window,"Getränkekarte verwalten",func(): game.drinks.open_editor(),"drink_manage"))
 	pause_window.visibility_changed.connect(func():
 		if pause_window.visible: pause_buttons[0].grab_focus())
 
@@ -228,7 +242,7 @@ func layout() -> void:
 	rect(brand,16,5,110,54)
 	rect(room,132,24,430 if not compact else size.x-180,30)
 	room.add_theme_font_size_override("font_size",15 if not compact else 12)
-	var dock_buttons: Array=[person,menu] if game.room=="outside" else [person,build,quests_button,menu]
+	var dock_buttons: Array=[person,menu] if game.room=="outside" else ([person,build,quests_button,edit_button,menu] if compact else [person,build,quests_button,menu])
 	var dock_width := dock_buttons.size()*56-8
 	for n in range(dock_buttons.size()): rect(dock_buttons[n],(size.x-dock_width)*.5+n*56,size.y-82,48,48)
 	rect(status,24,size.y-25,size.x-48,20)
@@ -279,7 +293,7 @@ func layout() -> void:
 	rect(oil_subtitle,20,327,ow-40,25)
 	oil_subtitle.add_theme_font_size_override("font_size",15 if not compact else 12)
 	rect(oil_close,20,370,ow-40,44)
-	pause_window.size=Vector2i(int(minf(480,size.x-24)),int(minf(660,size.y-24)))
+	pause_window.size=Vector2i(int(minf(480,size.x-24)),int(minf(720,size.y-24)))
 	for n in range(pause_buttons.size()): rect(pause_buttons[n],20,78+n*54,pause_window.size.x-40,44)
 	context.size=Vector2(208,350)
 	for n in range(3): rect(context_buttons[n],10,42+n*50,188,44)
@@ -302,11 +316,12 @@ func update(delta: float) -> void:
 		if quests_window.visible: quests_window.popup_centered()
 	person.text=""
 	person.tooltip_text="Figur wechseln · "+game.character_name
-	var dock_visible: bool= not picker.visible and not oil.visible and not pause_window.visible and not quests_window.visible and not context.visible and game.tool==""
+	var dock_visible: bool= not picker.visible and not oil.visible and not pause_window.visible and not quests_window.visible and not context.visible and not (game.drinks!=null and game.drinks.is_open()) and game.tool==""
 	person.visible=dock_visible
 	menu.visible=dock_visible
 	build.visible=dock_visible and game.room!="outside"
 	quests_button.visible=dock_visible and game.room!="outside"
+	edit_button.visible=dock_visible and game.room!="outside" and game.get_viewport_rect().size.x<760
 	room.add_theme_color_override("font_color",Color("213f41") if game.room=="outside" else PAPER)
 	room.text={"outside":"VOR DER GARAGE","garage":"GARAGE","workshop":"WERKSTATT / DER GABI-TREFFPUNKT"}[game.room]
 	if speech.text!=previous_speech:
@@ -324,7 +339,7 @@ func update(delta: float) -> void:
 	if tools.visible: tool_label.text=game.TYPES[game.tool].name+(" verschieben" if game.selected_id!=0 else " platzieren")
 
 func blocked() -> bool:
-	return picker.visible or oil.visible or pause_window.visible or quests_window.visible or palette.visible or context.visible
+	return picker.visible or oil.visible or pause_window.visible or quests_window.visible or palette.visible or context.visible or (game.drinks!=null and game.drinks.is_open())
 
 func open_picker() -> void:
 	game.path.clear()
@@ -366,6 +381,6 @@ func debug_state() -> Dictionary:
 	var controls: Dictionary={}
 	for id in targets:
 		var center := target_center(targets[id])
-		controls[id]={"x":center.x,"y":center.y}
+		controls[id]={"x":center.x,"y":center.y,"w":targets[id].size.x,"h":targets[id].size.y,"visible":targets[id].is_visible_in_tree() and targets[id].get_window().visible,"enabled":not targets[id].disabled if targets[id] is Button else true}
 	return {"palette":palette.visible,"paused":pause_window.visible,"context":context.visible,"quests":quests_window.visible,"targets":controls}
 
